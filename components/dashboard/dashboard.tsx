@@ -1,8 +1,5 @@
 "use client";
 import { useEffect, useState } from "react";
-import Link from "next/link";
-import { useTheme } from "next-themes";
-import { motion, useReducedMotion } from "motion/react";
 import { format } from "date-fns";
 import {
   ArrowDownWideNarrow,
@@ -11,28 +8,25 @@ import {
   Check,
   ChevronRight,
   CircleHelp,
-  Command,
   LayoutGrid,
   ListFilter,
   Loader2,
-  Moon,
   Plus,
   Search,
   Sparkles,
-  Sun,
   Target,
-  TrendingUp,
   Users,
   X,
   AlertCircle,
-  Clock3,
 } from "lucide-react";
 import { useLeads } from "@/hooks/use-leads";
-import { isOverdue, isToday, selectLeads } from "@/lib/leads";
+import { selectLeads } from "@/lib/leads";
 import { statuses, statusLabels, type LeadStatus } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { CreateLeadDialog } from "@/components/leads/create-lead-dialog";
 import { LeadDialog } from "@/components/timeline/lead-dialog";
+import { Header } from "./header";
+import { SummaryMetrics } from "./summary-metrics";
 import { LeadRow } from "./lead-row";
 export function Dashboard() {
   const leads = useLeads();
@@ -42,8 +36,6 @@ export function Dashboard() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [now, setNow] = useState<Date | null>(null);
   const [help, setHelp] = useState(false);
-  const { resolvedTheme, setTheme } = useTheme();
-  const reducedMotion = useReducedMotion();
   useEffect(() => {
     const update = () => setNow(new Date());
     update();
@@ -57,79 +49,10 @@ export function Dashboard() {
   const data = leads.data ?? [];
   const clock = now ?? new Date(0);
   const result = selectLeads(data, status, search, clock);
-  const metrics = [
-    {
-      title: "Total leads",
-      value: data.length,
-      icon: Users,
-      detail: "Connections in your pipeline",
-      color: "indigo",
-    },
-    {
-      title: "Follow-ups today",
-      value: data.filter((lead) => isToday(lead.nextFollowUpAt, clock)).length,
-      icon: CalendarDays,
-      detail: "A little attention goes a long way",
-      color: "amber",
-    },
-    {
-      title: "Overdue follow-ups",
-      value: data.filter((lead) => isOverdue(lead.nextFollowUpAt, clock))
-        .length,
-      icon: Clock3,
-      detail: "Ready for your next move",
-      color: "rose",
-    },
-    {
-      title: "Won leads",
-      value: data.filter((lead) => lead.status === "WON").length,
-      icon: TrendingUp,
-      detail: "Relationships turned into results",
-      color: "teal",
-    },
-  ];
   const loading = leads.isPending || !now;
   return (
     <div className="min-h-screen">
-      <header className="app-header">
-        <div className="page-width flex h-[76px] items-center justify-between gap-3">
-          <Link
-            className="flex items-center gap-2.5"
-            href="/"
-            aria-label="LeadFlow home"
-          >
-            <span className="logo-mark">
-              <Command size={22} strokeWidth={2.5} />
-            </span>
-            <span className="text-xl font-semibold tracking-[-0.8px]">
-              leadflow<span className="text-primary">.</span>
-            </span>
-            <span className="ml-5 hidden border-l border-border pl-5 text-xs text-muted-foreground sm:inline">
-              Less admin. More relationships.
-            </span>
-          </Link>
-          <div className="flex items-center gap-3">
-            <span className="hidden items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-[11px] text-muted-foreground md:flex">
-              <span className="size-1.5 rounded-full bg-emerald-500" />
-              Your sales workspace
-            </span>
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="Toggle color theme"
-              onClick={() =>
-                setTheme(resolvedTheme === "dark" ? "light" : "dark")
-              }
-            >
-              <Sun size={18} className="hidden dark:block" />
-              <Moon size={18} className="dark:hidden" />
-            </Button>
-            <span className="hidden size-8 items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-[11px] font-semibold text-primary sm:flex">
-              LF
-            </span>
-          </div>
-        </div>
-      </header>
+      <Header />
       <main className="page-width pb-10 pt-7 sm:pt-10">
         <div className="mb-7 flex items-center gap-2 text-[11px] text-muted-foreground">
           <LayoutGrid size={13} />
@@ -158,40 +81,12 @@ export function Dashboard() {
             </Button>
           </CreateLeadDialog>
         </div>
-        <motion.div
-          initial={reducedMotion ? false : { opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-          className="mb-8 grid grid-cols-2 gap-3 lg:grid-cols-4"
-        >
-          {metrics.map((metric) => (
-            <div
-              key={metric.title}
-              className={`metric-card metric-${metric.color}`}
-            >
-              <div className="mb-4 flex items-center justify-between gap-2">
-                <p className="text-xs font-medium text-muted-foreground">
-                  {metric.title}
-                </p>
-                <span className="metric-icon">
-                  <metric.icon size={16} />
-                </span>
-              </div>
-              {loading ? (
-                <div className="h-9 w-12 animate-pulse rounded bg-accent" />
-              ) : (
-                <p className="text-[32px] font-semibold leading-none tracking-[-1px]">
-                  {leads.isError
-                    ? "—"
-                    : metric.value.toString().padStart(2, "0")}
-                </p>
-              )}
-              <p className="mt-3 hidden text-[11px] text-muted-foreground sm:block">
-                {metric.detail}
-              </p>
-            </div>
-          ))}
-        </motion.div>
+        <SummaryMetrics
+          data={data}
+          now={clock}
+          loading={loading}
+          error={leads.isError}
+        />
         <section className="workspace-panel" aria-labelledby="pipeline-heading">
           <div className="flex flex-wrap items-center justify-between gap-3 px-5 pb-5 pt-6 sm:px-6">
             <div className="flex items-center gap-2.5">

@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { defineConfig, devices } from "@playwright/test";
 const database =
   process.env.TEST_DATABASE_URL ||

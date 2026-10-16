@@ -1,18 +1,9 @@
 "use client";
+import { DiscussionForm } from "./discussion-form";
+import { DiscussionTimeline } from "./discussion-timeline";
 import { useRef } from "react";
-import { useForm, useWatch } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { format, formatDistanceToNow } from "date-fns";
-import {
-  Building2,
-  CalendarClock,
-  Check,
-  Loader2,
-  MessageSquare,
-  Phone,
-  Send,
-  X,
-} from "lucide-react";
+import { format } from "date-fns";
+import { Building2, CalendarClock, Check, Loader2, Phone } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -21,10 +12,6 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useLead, useLeadMutations } from "@/hooks/use-leads";
-import {
-  discussionFormSchema,
-  type DiscussionFormInput,
-} from "@/lib/validations/leads";
 import { statusLabels, statuses, type LeadStatus } from "@/lib/types";
 import { StatusBadge } from "@/components/leads/status-badge";
 import { isOverdue } from "@/lib/leads";
@@ -61,28 +48,6 @@ export function LeadDialog({
 function LeadDetail({ id }: { id: string }) {
   const lead = useLead(id);
   const { patch, discuss } = useLeadMutations(id);
-  const form = useForm<DiscussionFormInput>({
-    resolver: zodResolver(discussionFormSchema),
-    defaultValues: { content: "", date: "", time: "" },
-  });
-  const followUpDate = useWatch({ control: form.control, name: "date" });
-  async function submit(input: DiscussionFormInput) {
-    try {
-      await discuss.mutateAsync({
-        content: input.content,
-        ...(input.date
-          ? {
-              followUpAt: new Date(
-                `${input.date}T${input.time || "09:00"}`,
-              ).toISOString(),
-            }
-          : {}),
-      });
-      form.reset();
-    } catch {
-      /* Mutation displays the error; keep the draft for retry. */
-    }
-  }
   if (lead.isPending)
     return (
       <>
@@ -153,7 +118,7 @@ function LeadDetail({ id }: { id: string }) {
           <select
             id="lead-status"
             className="input h-9 w-auto text-xs"
-            disabled={patch.isPending}
+            disabled={patch.isPending || discuss.isPending}
             value={data.status}
             onChange={(event) =>
               patch.mutate({ status: event.target.value as LeadStatus })
@@ -197,141 +162,8 @@ function LeadDetail({ id }: { id: string }) {
           No follow-up scheduled
         </p>
       )}
-      <h3 className="mb-5 flex items-center gap-2 text-sm font-semibold">
-        <MessageSquare size={16} />
-        Discussion history{" "}
-        <span className="text-muted-foreground">
-          ({data.discussions.length})
-        </span>
-      </h3>
-      <div className="mb-6 max-h-72 overflow-y-auto pr-2">
-        {!data.discussions.length ? (
-          <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-            Every relationship starts with a conversation. Add your first note
-            below.
-          </div>
-        ) : (
-          <ol className="ml-2 border-l border-border">
-            {data.discussions.map((note) => (
-              <li key={note.id} className="relative pb-6 pl-6 last:pb-1">
-                <span className="absolute -left-[5px] top-1 size-2.5 rounded-full border-2 border-card bg-primary" />
-                <div className="mb-2 flex flex-wrap items-center justify-between gap-1 text-xs text-muted-foreground">
-                  <time dateTime={note.createdAt}>
-                    {format(new Date(note.createdAt), "MMM d, yyyy · h:mm a")}
-                  </time>
-                  <span>
-                    {formatDistanceToNow(new Date(note.createdAt), {
-                      addSuffix: true,
-                    })}
-                  </span>
-                </div>
-                <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
-                  {note.content}
-                </p>
-                {note.followUpAt && (
-                  <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <CalendarClock size={12} />
-                    Scheduled for{" "}
-                    {format(new Date(note.followUpAt), "MMM d, yyyy · h:mm a")}
-                  </p>
-                )}
-              </li>
-            ))}
-          </ol>
-        )}
-      </div>
-      <form
-        className="space-y-4 border-t border-border pt-5"
-        onSubmit={form.handleSubmit(submit)}
-        noValidate
-      >
-        <div>
-          <label htmlFor="discussion-content" className="field-label">
-            Add a discussion <span className="text-primary">*</span>
-          </label>
-          <textarea
-            id="discussion-content"
-            className="input min-h-24 resize-y"
-            placeholder="What did you discuss? Capture the details that matter…"
-            maxLength={5000}
-            {...form.register("content")}
-            aria-invalid={!!form.formState.errors.content}
-            aria-describedby="content-error"
-          />
-          <p id="content-error" className="field-error">
-            {form.formState.errors.content?.message}
-          </p>
-        </div>
-        <div className="rounded-xl bg-background p-4">
-          <p className="mb-3 flex items-center gap-2 text-xs font-medium">
-            <CalendarClock size={14} />
-            Schedule a follow-up{" "}
-            <span className="font-normal text-muted-foreground">
-              (optional)
-            </span>
-          </p>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label htmlFor="followup-date" className="sr-only">
-                Follow-up date
-              </label>
-              <input
-                id="followup-date"
-                className="input"
-                type="date"
-                {...form.register("date")}
-                aria-describedby="date-error"
-              />
-            </div>
-            <div>
-              <label htmlFor="followup-time" className="sr-only">
-                Follow-up time
-              </label>
-              <input
-                id="followup-time"
-                className="input"
-                type="time"
-                {...form.register("time")}
-              />
-            </div>
-          </div>
-          <p id="date-error" className="field-error">
-            {form.formState.errors.date?.message}
-          </p>
-          <p className="mt-2 text-xs text-muted-foreground">
-            Your local time · defaults to 9:00 AM. Leaving this blank keeps the
-            existing follow-up.
-          </p>
-          {followUpDate && (
-            <button
-              type="button"
-              className="mt-2 flex items-center gap-1 text-xs text-primary"
-              onClick={() => {
-                form.setValue("date", "");
-                form.setValue("time", "");
-              }}
-            >
-              <X size={12} />
-              Remove new schedule
-            </button>
-          )}
-        </div>
-        {discuss.isError && (
-          <p role="alert" className="field-error">
-            {discuss.error.message}
-          </p>
-        )}
-        <div className="flex justify-end">
-          <Button disabled={discuss.isPending || patch.isPending}>
-            {discuss.isPending ? (
-              <Loader2 size={15} className="animate-spin" />
-            ) : (
-              <Send size={15} />
-            )}
-            Save discussion
-          </Button>
-        </div>
-      </form>
+      <DiscussionTimeline discussions={data.discussions} />
+      <DiscussionForm discuss={discuss} disabled={patch.isPending} />
     </>
   );
 }

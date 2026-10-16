@@ -1,6 +1,75 @@
 import { test, expect } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
 import { createPrismaClient } from "../../lib/prisma";
+test("failed requests show retry feedback and preserve discussion drafts", async ({
+  page,
+}) => {
+  await page.route("**/api/leads", async (route) => {
+    if (route.request().method() === "GET")
+      await route.fulfill({
+        status: 500,
+        json: {
+          error: {
+            code: "SERVER_ERROR",
+            message: "Temporary database outage.",
+          },
+        },
+      });
+    else await route.continue();
+  });
+  await page.goto("/");
+  await expect(
+    page.getByRole("heading", { name: "We couldn’t load your pipeline." }),
+  ).toBeVisible();
+  await page.unroute("**/api/leads");
+  await page.getByRole("button", { name: "Try again", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Open Ananya Sharma", exact: true })
+    .click();
+  await expect(page.getByLabel("Lead status", { exact: true })).toHaveValue(
+    "QUALIFIED",
+  );
+  await page.route("**/api/leads/seed-ananya", async (route) => {
+    if (route.request().method() === "PATCH")
+      await route.fulfill({
+        status: 500,
+        json: {
+          error: {
+            code: "SERVER_ERROR",
+            message: "Status could not be saved.",
+          },
+        },
+      });
+    else await route.continue();
+  });
+  await page.getByLabel("Lead status", { exact: true }).selectOption("WON");
+  await expect(page.getByText("Status could not be saved.")).toBeVisible();
+  await expect(page.getByLabel("Lead status", { exact: true })).toHaveValue(
+    "QUALIFIED",
+  );
+  await page.route("**/api/leads/seed-ananya/discussions", (route) =>
+    route.fulfill({
+      status: 500,
+      json: {
+        error: {
+          code: "SERVER_ERROR",
+          message: "Discussion could not be saved.",
+        },
+      },
+    }),
+  );
+  await page
+    .getByLabel("Add a discussion")
+    .fill("Keep this unsaved draft for retry.");
+  await page.getByRole("button", { name: "Save discussion" }).click();
+  await expect(page.getByRole("dialog").getByRole("alert")).toHaveText(
+    "Discussion could not be saved.",
+  );
+  await expect(page.getByLabel("Add a discussion")).toHaveValue(
+    "Keep this unsaved draft for retry.",
+  );
+  await expect(page.getByRole("dialog").locator("ol li")).toHaveCount(2);
+});
 test("create, discuss, schedule, change status, and retain after refresh", async ({
   page,
 }, testInfo) => {
@@ -118,6 +187,10 @@ test("responsive themes, dialog accessibility, and screenshots", async ({
   await expect(
     page.getByRole("button", { name: "Open Ananya Sharma", exact: true }),
   ).toBeVisible();
+  await expect(page.locator(".metric-card").first().locator("..")).toHaveCSS(
+    "opacity",
+    "1",
+  );
   await page.screenshot({
     path: `docs/screenshots/${testInfo.project.name}-light.png`,
     fullPage: true,
@@ -148,7 +221,7 @@ test("responsive themes, dialog accessibility, and screenshots", async ({
   ).toBeVisible();
   await page.screenshot({
     path: `docs/screenshots/${testInfo.project.name}-timeline.png`,
-    fullPage: true,
+    fullPage: false,
   });
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);
